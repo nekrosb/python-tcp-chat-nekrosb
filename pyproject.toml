@@ -1,0 +1,24 @@
+[project]
+name = "python-tcp-chat-nekrosb"
+version = "0.0.1"
+description = "A simple TCP chat application written in Python."
+readme = "README.md"
+authors = [
+    { name = "nekrosb", email = "makarov.nikita.mn@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "rich>=15.0.0",
+]
+
+[project.scripts]
+python-tcp-chat-nekrosb = "python_tcp_chat_nekrosb:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.2",
+]
