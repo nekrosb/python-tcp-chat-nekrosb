@@ -35,5 +35,5 @@ def handle_client(client_socket):
     print("Client disconnected.")
     client_socket.close()
 
-    if __name__ == "__main__":
-        main()
+
+main()
