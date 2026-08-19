@@ -1,8 +1,9 @@
 import logging
 import socket
 import threading
-from rich import print
 from datetime import datetime
+
+from rich import print
 
 
 def main():
@@ -45,7 +46,7 @@ def main():
                     f"[bold blue]Connection from {addr} has been established.[/bold blue]"
                 )
                 threading.Thread(target=handle_client, args=(client_socket,)).start()
-            except socket.timeout:
+            except TimeoutError:
                 continue
     except KeyboardInterrupt as e:
         logging.info(f"Server shutting down from keyboard interrupt: {e}")
