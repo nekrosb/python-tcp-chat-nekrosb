@@ -20,37 +20,35 @@ def main():
     stop_event = threading.Event()
     try:
         client_socket.connect((host, port))
-        log.info(f"Connected to server at {host}:{port}")
+    except ConnectionRefusedError:
+        log.error(f"Could not connect to server at {host}:{port} ")
+        return
 
-        receive_thread = threading.Thread(
-            target=receive_messages, args=(client_socket, stop_event, log)
-        )
-        receive_thread.start()
+    input_msg = threading.Thread(
+        target=send_messages, args=(client_socket, stop_event, log), daemon=True
+    )
+    input_msg.start()
+    log.info(f"Connected to server at {host}:{port}")
 
+    receive_thread = threading.Thread(
+        target=receive_messages, args=(client_socket, stop_event, log), daemon=True
+    )
+    receive_thread.start()
+
+    try:
         while not stop_event.is_set():
-            message = input("Enter message (or '/exit' to quit): ")
-            if message.lower().strip() == "/exit":
-                log.info("Exiting client...")
-                helpers.shutdown_server(client_socket, stop_event)
-                break
+            stop_event.wait(0.5)
 
-            client_socket.sendall(message.encode())
-    except ConnectionRefusedError as e:
-        log.error(f"Could not connect to server at {host}:{port} \n {e}")
+    finally:
+        log.info("Exiting client...")
+        stop_event.set()
+        client_socket.close()
         helpers.shutdown_server(client_socket, stop_event)
-    except OSError as e:
-        log.error(f"An error occurred: {e}")
-        helpers.shutdown_server(client_socket, stop_event)
-    except KeyboardInterrupt:
-        log.info("Client shutting down...")
-        helpers.shutdown_server(client_socket, stop_event)
-
-    client_socket.close()
 
 
 def receive_messages(client_socket, stop_event, log):
+    client_socket.settimeout(1.0)
     while not stop_event.is_set():
-        client_socket.settimeout(1.0)
         try:
             data = client_socket.recv(1024)
             if not data:
@@ -67,6 +65,20 @@ def receive_messages(client_socket, stop_event, log):
             break
         except OSError as e:
             log.error(f"Error receiving data: {e}")
+            stop_event.set()
+            break
+
+
+def send_messages(client_socket, stop_event, log):
+    while not stop_event.is_set():
+        try:
+            message = input("Enter message (or '/exit' to quit): ")
+            if message.lower() == "/exit":
+                stop_event.set()
+                break
+            client_socket.sendall(message.encode())
+        except OSError as e:
+            log.error(f"Error sending data: {e}")
             stop_event.set()
             break
 

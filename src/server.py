@@ -47,6 +47,8 @@ def main():
 def handle_client(client_socket, addr, stop_event, log):
     log.info(f"Handling client {addr}")
     print(f"clint {client_socket} connected from {addr}")
+
+    client_socket.settimeout(1.0)
     while not stop_event.is_set():
         try:
             data = client_socket.recv(1024)
@@ -55,6 +57,9 @@ def handle_client(client_socket, addr, stop_event, log):
                 break
             log.info(f"Received data from {addr}: {data.decode()}")
             client_socket.sendall(data)
+
+        except TimeoutError:
+            continue
         except ConnectionResetError:
             log.warning(f"Connection reset by {addr}")
             break
