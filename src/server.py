@@ -54,73 +54,120 @@ def handle_client(
 ):
     log.info(f"Handling client {addr}")
 
-    with nik_lock:
-        while not stop_event.is_set():
-            try:
-                client_socket.sendall(
-                    helpers.build_msg("broadcast", "Please provide a nickname:")
-                )
-                nickname = client_socket.recv(1024).decode().strip()
-                if not nickname:
-                    log.warning(f"Client {addr} did not provide a nickname")
-                    continue
+    nickname = None
+
+    # Nickname selection
+    client_socket.settimeout(30.0)
+
+    while not stop_event.is_set():
+        try:
+            client_socket.sendall(
+                helpers.build_msg("broadcast", "Please provide a nickname:")
+            )
+
+            nickname = client_socket.recv(1024).decode().strip()
+
+            if not nickname:
+                log.warning(f"Client {addr} did not provide a nickname")
+                continue
+
+            # Lock only protects checking/adding nickname.
+            with nik_lock:
                 if nickname in niks:
                     client_socket.sendall(
                         helpers.build_msg(
-                            "broadcast", "Nickname already taken. Please choose another."
+                            "broadcast",
+                            "Nickname already taken. Please choose another.",
                         )
                     )
+                    nickname = None
                     continue
+
                 niks.add(nickname)
                 list_of_clients[nickname] = [client_socket, addr]
-                client_socket.sendall(
-                    helpers.build_msg("broadcast", "Nickname accepted. Welcome to the chat!")
-                )
-                helpers.send_broadcast_msg(
-                    client_socket, f"{nickname} has joined the chat.", list_of_clients
-                )
-                log.info(f"Client {addr} set nickname to {nickname}")
-                break
 
-            except ConnectionResetError:
-                log.warning(f"Connection reset by {addr} during nickname selection")
-                break
-            except OSError as e:
-                log.error(f"Error handling client {addr}: {e}")
-                break
+            # No lock here — other clients can select nicknames.
+            client_socket.sendall(
+                helpers.build_msg(
+                    "broadcast",
+                    "Nickname accepted. Welcome to the chat!"
+                )
+            )
 
-    client_socket.sendall(
-        helpers.build_msg("users", helpers.users_table(list_of_clients))
-    )
+            helpers.send_broadcast_msg(
+                client_socket,
+                f"{nickname} has joined the chat.",
+                list_of_clients,
+            )
+
+            log.info(f"Client {addr} set nickname to {nickname}")
+            break
+
+        except socket.timeout:
+            log.warning(f"Client {addr} timed out during nickname selection")
+            client_socket.close()
+            return
+
+        except ConnectionResetError:
+            log.warning(f"Connection reset by {addr} during nickname selection")
+            client_socket.close()
+            return
+
+        except OSError as e:
+            log.error(f"Error handling client {addr}: {e}")
+            client_socket.close()
+            return
+
+    if nickname is None:
+        client_socket.close()
+        return
 
     client_socket.settimeout(1.0)
+
+    # Chat loop
     while not stop_event.is_set():
         try:
             data = client_socket.recv(1024)
+
             if not data:
                 log.info(f"Client {addr} disconnected")
                 break
-            log.info(f"Received data from {addr}: {data.decode()}")
-            helpers.send_broadcast_msg(client_socket, data.decode(), list_of_clients)
 
+            message = data.decode().strip()
 
-        except TimeoutError:
+            if message:
+                log.info(f"Received data from {addr}: {message}")
+                helpers.send_broadcast_msg(
+                    client_socket,
+                    message,
+                    list_of_clients,
+                )
+
+        except socket.timeout:
             continue
+
         except ConnectionResetError:
             log.warning(f"Connection reset by {addr}")
             break
-        except Exception as e:
+
+        except OSError as e:
             log.error(f"Error handling client {addr}: {e}")
             break
-    
+
+    # Cleanup
     with nik_lock:
         if nickname in niks:
             niks.remove(nickname)
+
         if nickname in list_of_clients:
             del list_of_clients[nickname]
-    helpers.send_broadcast_msg(client_socket, f"{nickname} has left the chat.", list_of_clients)
+
+    helpers.send_broadcast_msg(
+        client_socket,
+        f"{nickname} has left the chat.",
+        list_of_clients,
+    )
+
     client_socket.close()
     log.info(f"Connection with {addr} closed")
-
-
 main()
