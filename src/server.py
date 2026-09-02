@@ -76,6 +76,9 @@ def handle_client(
                 client_socket.sendall(
                     helpers.build_msg("broadcast", "Nickname accepted. Welcome to the chat!")
                 )
+                helpers.send_broadcast_msg(
+                    client_socket, f"{nickname} has joined the chat.", list_of_clients
+                )
                 log.info(f"Client {addr} set nickname to {nickname}")
                 break
 
@@ -98,9 +101,8 @@ def handle_client(
                 log.info(f"Client {addr} disconnected")
                 break
             log.info(f"Received data from {addr}: {data.decode()}")
-            client_socket.sendall(
-                helpers.build_msg("broadcast", data.decode()).encode()
-            )
+            helpers.send_broadcast_msg(client_socket, data.decode(), list_of_clients)
+
 
         except TimeoutError:
             continue
@@ -116,6 +118,7 @@ def handle_client(
             niks.remove(nickname)
         if nickname in list_of_clients:
             del list_of_clients[nickname]
+    helpers.send_broadcast_msg(client_socket, f"{nickname} has left the chat.", list_of_clients)
     client_socket.close()
     log.info(f"Connection with {addr} closed")
 

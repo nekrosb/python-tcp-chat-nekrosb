@@ -35,3 +35,12 @@ def writer_msg(data):
         Console.brotcast_msg(msg["data"])
     elif msg["type"] == "users":
         Console.users_table(msg["data"])
+
+
+def send_broadcast_msg(socket, msg, list_users):
+    for user in list_users.values():
+        user_socket = user[0]
+        if user_socket == socket:
+            continue    
+
+        user_socket.sendall(build_msg("broadcast", msg))
