@@ -64,19 +64,12 @@ def receive_messages(client_socket, stop_event, log):
 
 			while b"\n" in buffer:
 				raw_message, buffer = buffer.split(b"\n", 1)
-				if len(raw_message) > helpers.MAX_MESSAGE_SIZE + helpers.MAX_NICKNAME_SIZE + 2:
-					log.error("Received an oversized message from server")
-					stop_event.set()
-					break
+
 				message = raw_message.decode("utf-8")
 
 				if message:
 					helpers.writer_msg(message)
 
-			if len(buffer) > helpers.MAX_MESSAGE_SIZE + helpers.MAX_NICKNAME_SIZE + 2:
-				log.error("Received an oversized message from server")
-				stop_event.set()
-				break
 
 		except socket.timeout:
 			continue
