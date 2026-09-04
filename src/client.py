@@ -48,25 +48,39 @@ def main():
 
 def receive_messages(client_socket, stop_event, log):
     client_socket.settimeout(1.0)
+
+    buffer = ""
+
     while not stop_event.is_set():
         try:
             data = client_socket.recv(1024)
+
             if not data:
                 log.info("Server closed the connection")
                 stop_event.set()
                 break
-            print(f"Received: {data.decode()}")
+
+            buffer += data.decode("utf-8")
+
+            while "\n" in buffer:
+                message, buffer = buffer.split("\n", 1)
+
+                if message:
+                    helpers.writer_msg(message)
 
         except TimeoutError:
             continue
+
         except ConnectionResetError:
             log.warning("Connection reset by server")
             stop_event.set()
             break
+
         except OSError as e:
             log.error(f"Error receiving data: {e}")
             stop_event.set()
             break
+
 
 
 def send_messages(client_socket, stop_event, log):
