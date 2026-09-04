@@ -206,7 +206,7 @@ def handle_client(
         if nickname in niks:
             niks.remove(nickname)
 
-        if nickname in list_of_clients:
+        if nickname in list_of_clients and list_of_clients[nickname][0] is client_socket:
             del list_of_clients[nickname]
 
     helpers.send_broadcast_msg(
