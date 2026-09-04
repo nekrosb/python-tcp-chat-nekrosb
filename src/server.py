@@ -16,6 +16,7 @@ def main():
     log = logging.getLogger(__name__)
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((host, port))
     server_socket.listen(5)
     log.info(f"Server listening on {host}:{port}")
@@ -36,7 +37,7 @@ def main():
                 daemon=True,
             )
             client_thread.start()
-        except TimeoutError:
+        except socket.timeout:
             continue
         except KeyboardInterrupt:
             log.info("Server shutting down...")
@@ -44,7 +45,7 @@ def main():
             break
 
         except OSError as e:
-            logging.log.error(f"Socket error: {e}")
+            log.error(f"Socket error: {e}")
             helpers.shutdown_server(server_socket, stop_event)
             break
 
@@ -58,6 +59,7 @@ def handle_client(
 
     # Nickname selection
     client_socket.settimeout(30.0)
+    buffer = ""
 
     while not stop_event.is_set():
         try:
@@ -65,7 +67,15 @@ def handle_client(
                 helpers.build_msg("broadcast", "Please provide a nickname:")
             )
 
-            nickname = client_socket.recv(1024).decode().strip()
+            while "\n" not in buffer:
+                data = client_socket.recv(1024)
+                if not data:
+                    client_socket.close()
+                    return
+                buffer += data.decode("utf-8")
+
+            nickname, buffer = buffer.split("\n", 1)
+            nickname = nickname.strip()
 
             if not nickname:
                 log.warning(f"Client {addr} did not provide a nickname")
@@ -98,6 +108,7 @@ def handle_client(
                 client_socket,
                 f"{nickname} has joined the chat.",
                 list_of_clients,
+                nik_lock,
             )
 
             log.info(f"Client {addr} set nickname to {nickname}")
@@ -133,14 +144,20 @@ def handle_client(
                 log.info(f"Client {addr} disconnected")
                 break
 
-            message = data.decode().strip()
+            buffer += data.decode("utf-8")
 
-            if message:
+            while "\n" in buffer:
+                message, buffer = buffer.split("\n", 1)
+                message = message.strip()
+                if not message:
+                    continue
+
                 log.info(f"Received data from {addr}: {message}")
                 helpers.send_broadcast_msg(
                     client_socket,
                     message,
                     list_of_clients,
+                    nik_lock,
                 )
 
         except socket.timeout:
@@ -166,6 +183,7 @@ def handle_client(
         client_socket,
         f"{nickname} has left the chat.",
         list_of_clients,
+        nik_lock,
     )
 
     client_socket.close()

@@ -37,10 +37,35 @@ def writer_msg(data):
         Console.users_table(msg["data"])
 
 
-def send_broadcast_msg(socket, msg, list_users):
-    for user in list_users.values():
-        user_socket = user[0]
-        if user_socket == socket:
-            continue    
+def send_broadcast_msg(socket, msg, list_users, clients_lock):
+    disconnected_users = []
 
-        user_socket.sendall(build_msg("broadcast", msg))
+    with clients_lock:
+        users = list(list_users.items())
+
+    for username, user in users:
+        user_socket = user[0]
+
+        if user_socket == socket:
+            continue
+
+        try:
+            user_socket.sendall(build_msg("broadcast", msg))
+
+        except (ConnectionResetError, BrokenPipeError, OSError):
+            disconnected_users.append(username)
+
+    with clients_lock:
+        for username in disconnected_users:
+            user = list_users.get(username)
+            if user is None or user[0] is socket:
+                continue
+
+            user_socket = user[0]
+
+            try:
+                user_socket.close()
+            except OSError:
+                pass
+
+            del list_users[username]
