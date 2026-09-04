@@ -49,7 +49,7 @@ def main():
 def receive_messages(client_socket, stop_event, log):
 	client_socket.settimeout(1.0)
 
-	buffer = ""
+	buffer = b""
 
 	while not stop_event.is_set():
 		try:
@@ -60,19 +60,34 @@ def receive_messages(client_socket, stop_event, log):
 				stop_event.set()
 				break
 
-			buffer += data.decode("utf-8")
+			buffer += data
 
-			while "\n" in buffer:
-				message, buffer = buffer.split("\n", 1)
+			while b"\n" in buffer:
+				raw_message, buffer = buffer.split(b"\n", 1)
+				if len(raw_message) > helpers.MAX_MESSAGE_SIZE + helpers.MAX_NICKNAME_SIZE + 2:
+					log.error("Received an oversized message from server")
+					stop_event.set()
+					break
+				message = raw_message.decode("utf-8")
 
 				if message:
 					helpers.writer_msg(message)
+
+			if len(buffer) > helpers.MAX_MESSAGE_SIZE + helpers.MAX_NICKNAME_SIZE + 2:
+				log.error("Received an oversized message from server")
+				stop_event.set()
+				break
 
 		except socket.timeout:
 			continue
 
 		except ConnectionResetError:
 			log.warning("Connection reset by server")
+			stop_event.set()
+			break
+
+		except UnicodeDecodeError:
+			log.error("Received invalid UTF-8 data from server")
 			stop_event.set()
 			break
 

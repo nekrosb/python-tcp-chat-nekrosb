@@ -2,6 +2,9 @@ import json
 
 from classes.client.console import Console
 
+MAX_NICKNAME_SIZE = 32
+MAX_MESSAGE_SIZE = 4096
+
 
 def shutdown_server(socket, stop_event):
     stop_event.set()
@@ -18,8 +21,8 @@ def users_table(users: dict):
     return new_list_of_users
 
 
-def build_msg(type, data):
-    msg = {"type": type, "data": data}
+def build_msg(message_type, data):
+    msg = {"type": message_type, "data": data}
 
     return (json.dumps(msg) + "\n").encode("utf-8")
 
