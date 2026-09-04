@@ -158,7 +158,7 @@ def handle_client(
                 log.info(f"Received data from {addr}: {message}")
                 helpers.send_broadcast_msg(
                     client_socket,
-                    message,
+                    nickname + ": " + message,
                     list_of_clients,
                     nik_lock,
                 )
