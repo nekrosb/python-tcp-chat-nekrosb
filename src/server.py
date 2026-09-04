@@ -16,6 +16,7 @@ def main():
     log = logging.getLogger(__name__)
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((host, port))
     server_socket.listen(5)
     log.info(f"Server listening on {host}:{port}")
@@ -36,7 +37,7 @@ def main():
                 daemon=True,
             )
             client_thread.start()
-        except TimeoutError:
+        except socket.timeout:
             continue
         except KeyboardInterrupt:
             log.info("Server shutting down...")
@@ -44,7 +45,7 @@ def main():
             break
 
         except OSError as e:
-            logging.log.error(f"Socket error: {e}")
+            log.error(f"Socket error: {e}")
             helpers.shutdown_server(server_socket, stop_event)
             break
 
@@ -54,10 +55,17 @@ def handle_client(
 ):
     log.info(f"Handling client {addr}")
 
+    with nik_lock:
+        users = dict(list_of_clients)
+
+    if users:
+        client_socket.sendall(helpers.build_msg("users", helpers.users_table(users)))
+
     nickname = None
 
     # Nickname selection
     client_socket.settimeout(30.0)
+    buffer = b""
 
     while not stop_event.is_set():
         try:
@@ -65,7 +73,23 @@ def handle_client(
                 helpers.build_msg("broadcast", "Please provide a nickname:")
             )
 
-            nickname = client_socket.recv(1024).decode().strip()
+            while b"\n" not in buffer:
+                data = client_socket.recv(1024)
+                if not data:
+                    client_socket.close()
+                    return
+                buffer += data
+                if b"\n" not in buffer and len(buffer) > helpers.MAX_NICKNAME_SIZE:
+                    log.warning(f"Client {addr} sent an oversized nickname")
+                    client_socket.close()
+                    return
+
+            raw_nickname, buffer = buffer.split(b"\n", 1)
+            if len(raw_nickname) > helpers.MAX_NICKNAME_SIZE:
+                log.warning(f"Client {addr} sent an oversized nickname")
+                client_socket.close()
+                return
+            nickname = raw_nickname.decode("utf-8").strip()
 
             if not nickname:
                 log.warning(f"Client {addr} did not provide a nickname")
@@ -98,6 +122,7 @@ def handle_client(
                 client_socket,
                 f"{nickname} has joined the chat.",
                 list_of_clients,
+                nik_lock,
             )
 
             log.info(f"Client {addr} set nickname to {nickname}")
@@ -110,6 +135,11 @@ def handle_client(
 
         except ConnectionResetError:
             log.warning(f"Connection reset by {addr} during nickname selection")
+            client_socket.close()
+            return
+
+        except UnicodeDecodeError:
+            log.warning(f"Client {addr} sent an invalid nickname")
             client_socket.close()
             return
 
@@ -133,21 +163,38 @@ def handle_client(
                 log.info(f"Client {addr} disconnected")
                 break
 
-            message = data.decode().strip()
+            buffer += data
 
-            if message:
+            while b"\n" in buffer:
+                raw_message, buffer = buffer.split(b"\n", 1)
+                if len(raw_message) > helpers.MAX_MESSAGE_SIZE:
+                    log.warning(f"Client {addr} sent an oversized message")
+                    break
+                message = raw_message.decode("utf-8").strip()
+                if not message:
+                    continue
+
                 log.info(f"Received data from {addr}: {message}")
                 helpers.send_broadcast_msg(
                     client_socket,
-                    message,
+                    nickname + ": " + message,
                     list_of_clients,
+                    nik_lock,
                 )
+
+            if len(buffer) > helpers.MAX_MESSAGE_SIZE:
+                log.warning(f"Client {addr} sent an oversized message")
+                break
 
         except socket.timeout:
             continue
 
         except ConnectionResetError:
             log.warning(f"Connection reset by {addr}")
+            break
+
+        except UnicodeDecodeError:
+            log.warning(f"Client {addr} sent invalid UTF-8 data")
             break
 
         except OSError as e:
@@ -159,13 +206,14 @@ def handle_client(
         if nickname in niks:
             niks.remove(nickname)
 
-        if nickname in list_of_clients:
+        if nickname in list_of_clients and list_of_clients[nickname][0] is client_socket:
             del list_of_clients[nickname]
 
     helpers.send_broadcast_msg(
         client_socket,
         f"{nickname} has left the chat.",
         list_of_clients,
+        nik_lock,
     )
 
     client_socket.close()
