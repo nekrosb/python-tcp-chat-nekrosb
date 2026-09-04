@@ -55,6 +55,9 @@ def handle_client(
 ):
     log.info(f"Handling client {addr}")
 
+    if list_of_clients:
+        client_socket.sendall(helpers.build_msg("users", helpers.users_table(list_of_clients)))
+
     nickname = None
 
     # Nickname selection
