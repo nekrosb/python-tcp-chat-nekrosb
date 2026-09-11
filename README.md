@@ -6,12 +6,12 @@ this small Project Python TCP chat with the possibility Brodcast messages and pr
 
 ### requirements
 
-- python 3.12+
+- python 3.13+
 - uv 
 
 ### run project
 
-"""bash 
+'''bash 
 uv sync
 
 # for run the server
@@ -19,7 +19,7 @@ uv run src/server.py
 
 # for run the client.py 
 uv run src/client.py
-"""
+'''
 
 # Msg Protocol
 
@@ -68,21 +68,21 @@ Each JSON message is terminated by a newline character (`\n`). The newline chara
 
  The protocol supports four message types:
 
- - `user` — used to communicate the list of connected users.
+ - `users` — used to communicate the list of connected users.
 - `broadcast` — used to send a message to all connected users.
 - `privat` — used to send a private message to a specific user.
 - `command` — used to send server-side commands.
 
 ---
 
- ## 3.1. `user`
+ ## 3.1. `users`
 
- The `user` message type is used to transmit information about the users currently connected to the server.
+ The `users` message type is used to transmit information about the users currently connected to the server.
 
  The `data` field contains the relevant user information
 
 
- When a client receives a `user` message, it can use the contents of `data` to update the displayed list of connected users.
+ When a client receives a `users` message, it can use the contents of `data` to update the displayed list of connected users.
 
 ---
 
@@ -103,17 +103,20 @@ Each JSON message is terminated by a newline character (`\n`). The newline chara
 
 ---
 
- ## 3.3. `privat`
+ ## 3.3. `private`
 
- The `privat` message type is used for **private messages** between users.
+ The `private` message type is used for **private messages** between users.
 
  The `data` field contains the message that should be delivered privately.
+
+ and hear we add new field 'userName' for show server recipient
 
  Example:
 
 ```
 {
     "type": "privat",
+    "userName": "Bob"
     "data": "Hello, Bob!"
 }\n
 ```
@@ -138,6 +141,12 @@ Each JSON message is terminated by a newline character (`\n`). The newline chara
 ```
 
  The server parses the value of `data` and performs the corresponding operation.
+
+ ### list of commands 
+
+ not yet
+
+ You can also type "help" to display the help information. (not yet)
 
 ---
 
@@ -199,9 +208,9 @@ JSON_OBJECT + "\n"
 
  | Message Type | Purpose | `data` |
 | --- | --- | --- |
-| `user` | Provides the list of connected users | User list |
+| `users` | Provides the list of connected users | User list |
 | `broadcast` | Sends a message to all users | Message text |
-| `privat` | Sends a private message | Private message text |
+| `private` | Sends a private message | Private message text |
 | `command` | Executes a server-side command | Command string |
 
  All messages follow the same basic structure:
