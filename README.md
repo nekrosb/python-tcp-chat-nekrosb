@@ -109,7 +109,7 @@ Each JSON message is terminated by a newline character (`\n`). The newline chara
 
  The `data` field contains the message that should be delivered privately.
 
- and hear we add new field 'userName' for show server recipient
+ and here we add new field 'userName' for show server recipient
 
  Example:
 
