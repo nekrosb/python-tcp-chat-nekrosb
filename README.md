@@ -116,7 +116,7 @@ Each JSON message is terminated by a newline character (`\n`). The newline chara
 ```
 {
     "type": "privat",
-    "userName": "Bob"
+    "userName": "Bob",
     "data": "Hello, Bob!"
 }\n
 ```
