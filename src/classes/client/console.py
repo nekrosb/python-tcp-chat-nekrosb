@@ -24,3 +24,13 @@ class Console:
     @staticmethod
     def brotcast_msg(msg: str):
         RichConsole().print(f"[bold magenta]Broadcast:[/bold magenta] {msg}")
+
+    @staticmethod
+    def error_msg(msg: str):
+        RichConsole().print(f"[bold red]Error:[/bold red] {msg}")
+
+    @staticmethod
+    def private_msg(msg: str, sender: str):
+        RichConsole().print(
+            f"[bold blue]Private message from {sender}:[/bold blue] {msg}"
+        )

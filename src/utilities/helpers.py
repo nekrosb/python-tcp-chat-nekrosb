@@ -2,8 +2,8 @@ import json
 
 from classes.client.console import Console
 
-MAX_NICKNAME_SIZE = 32
-MAX_MESSAGE_SIZE = 4096
+MAX_NICKNAME_SIZE = 320
+MAX_MESSAGE_SIZE = 40960
 
 
 def shutdown_server(socket, stop_event):
@@ -21,54 +21,47 @@ def users_table(users: dict):
     return new_list_of_users
 
 
-def build_msg(message_type, data):
+def build_msg(message_type, data, command=None, userName=None):
     msg = {"type": message_type, "data": data}
-
+    if command is not None:
+        msg["command"] = command
+    if userName is not None:
+        msg["userName"] = userName
     return (json.dumps(msg) + "\n").encode("utf-8")
 
 
 def decode_message(data):
-    return json.loads(data)
+    if not isinstance(data, str):
+        raise TypeError("Message payload must be a JSON string.")
+
+    try:
+        msg = json.loads(data)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid JSON payload.") from exc
+
+    if not isinstance(msg, dict):
+        raise ValueError("JSON message must be an object.")
+
+    return msg
 
 
 def writer_msg(data):
-    msg = decode_message(data)
+    try:
+        msg = decode_message(data)
+    except (TypeError, ValueError):
+        Console.error_msg("Received invalid message data from the server.")
+        return
 
-    if msg["type"] == "broadcast":
-        Console.brotcast_msg(msg["data"])
-    elif msg["type"] == "users":
-        Console.users_table(msg["data"])
+    message_type = msg.get("type")
+    message_data = msg.get("data", "")
+
+    if message_type == "users" and isinstance(message_data, dict):
+        Console.users_table(message_data)
+    elif message_type == "broadcast":
+        Console.brotcast_msg(str(message_data))
+    elif message_type == "command":
+        Console.error_msg(str(message_data))
+    else:
+        Console.brotcast_msg(str(message_data))
 
 
-def send_broadcast_msg(socket, msg, list_users, clients_lock):
-    disconnected_users = []
-
-    with clients_lock:
-        users = list(list_users.items())
-
-    for username, user in users:
-        user_socket = user[0]
-
-        if user_socket == socket:
-            continue
-
-        try:
-            user_socket.sendall(build_msg("broadcast", msg))
-
-        except (ConnectionResetError, BrokenPipeError, OSError):
-            disconnected_users.append(username)
-
-    with clients_lock:
-        for username in disconnected_users:
-            user = list_users.get(username)
-            if user is None or user[0] is socket:
-                continue
-
-            user_socket = user[0]
-
-            try:
-                user_socket.close()
-            except OSError:
-                pass
-
-            del list_users[username]
