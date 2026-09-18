@@ -2,8 +2,8 @@ import json
 
 from classes.client.console import Console
 
-MAX_NICKNAME_SIZE = 32
-MAX_MESSAGE_SIZE = 4096
+MAX_NICKNAME_SIZE = 320
+MAX_MESSAGE_SIZE = 40960
 
 
 def shutdown_server(socket, stop_event):
@@ -21,8 +21,14 @@ def users_table(users: dict):
     return new_list_of_users
 
 
-def build_msg(message_type, data):
-    msg = {"type": message_type, "data": data}
+
+def build_msg(message_type, data, command=None, userName=None):
+    msg = {
+        "type": message_type, 
+        **({"command": command} if command else {}), # add command in dic if provided
+        **({"userName": userName} if userName else {}), # add user name in dic if provided
+        "data": data
+        }
 
     return (json.dumps(msg) + "\n").encode("utf-8")
 
@@ -33,42 +39,12 @@ def decode_message(data):
 
 def writer_msg(data):
     msg = decode_message(data)
+    message_type = msg.get("type")
+    message_data = msg.get("data", "")
 
-    if msg["type"] == "broadcast":
-        Console.brotcast_msg(msg["data"])
-    elif msg["type"] == "users":
-        Console.users_table(msg["data"])
+    if message_type == "users" and isinstance(message_data, dict):
+        Console.users_table(message_data)
+    else:
+        Console.brotcast_msg(str(message_data))
 
 
-def send_broadcast_msg(socket, msg, list_users, clients_lock):
-    disconnected_users = []
-
-    with clients_lock:
-        users = list(list_users.items())
-
-    for username, user in users:
-        user_socket = user[0]
-
-        if user_socket == socket:
-            continue
-
-        try:
-            user_socket.sendall(build_msg("broadcast", msg))
-
-        except (ConnectionResetError, BrokenPipeError, OSError):
-            disconnected_users.append(username)
-
-    with clients_lock:
-        for username in disconnected_users:
-            user = list_users.get(username)
-            if user is None or user[0] is socket:
-                continue
-
-            user_socket = user[0]
-
-            try:
-                user_socket.close()
-            except OSError:
-                pass
-
-            del list_users[username]
