@@ -21,29 +21,46 @@ def users_table(users: dict):
     return new_list_of_users
 
 
-
 def build_msg(message_type, data, command=None, userName=None):
-    msg = {
-        "type": message_type, 
-        **({"command": command} if command else {}), # add command in dic if provided
-        **({"userName": userName} if userName else {}), # add user name in dic if provided
-        "data": data
-        }
-
+    msg = {"type": message_type, "data": data}
+    if command is not None:
+        msg["command"] = command
+    if userName is not None:
+        msg["userName"] = userName
     return (json.dumps(msg) + "\n").encode("utf-8")
 
 
 def decode_message(data):
-    return json.loads(data)
+    if not isinstance(data, str):
+        raise TypeError("Message payload must be a JSON string.")
+
+    try:
+        msg = json.loads(data)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid JSON payload.") from exc
+
+    if not isinstance(msg, dict):
+        raise ValueError("JSON message must be an object.")
+
+    return msg
 
 
 def writer_msg(data):
-    msg = decode_message(data)
+    try:
+        msg = decode_message(data)
+    except (TypeError, ValueError):
+        Console.error_msg("Received invalid message data from the server.")
+        return
+
     message_type = msg.get("type")
     message_data = msg.get("data", "")
 
     if message_type == "users" and isinstance(message_data, dict):
         Console.users_table(message_data)
+    elif message_type == "broadcast":
+        Console.brotcast_msg(str(message_data))
+    elif message_type == "command":
+        Console.error_msg(str(message_data))
     else:
         Console.brotcast_msg(str(message_data))
 
