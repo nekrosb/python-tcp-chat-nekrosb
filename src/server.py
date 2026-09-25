@@ -24,6 +24,8 @@ def main():
     stop_event = threading.Event()
     nik_lock = threading.Lock()
     niks = set()
+    chat_history = []
+    history_lock = threading.Lock()
     list_of_clients = {}
 
     while not stop_event.is_set():
@@ -37,7 +39,17 @@ def main():
 
             client_thread = threading.Thread(
                 target=handle_client,
-                args=(client, addr, stop_event, log, nik_lock, niks, list_of_clients),
+                args=(
+                    client,
+                    addr,
+                    stop_event,
+                    log,
+                    nik_lock,
+                    niks,
+                    list_of_clients,
+                    chat_history,
+                    history_lock,
+                ),
                 daemon=True,
             )
             client_thread.start()
@@ -56,7 +68,15 @@ def main():
 
 
 def handle_client(
-    client_socket, addr, stop_event, log, nik_lock, niks, list_of_clients
+    client_socket,
+    addr,
+    stop_event,
+    log,
+    nik_lock,
+    niks,
+    list_of_clients,
+    chat_history,
+    history_lock,
 ):
     log.info(f"Handling client {addr}")
 
@@ -65,6 +85,7 @@ def handle_client(
 
     if users:
         client_socket.sendall(helpers.build_msg("users", helpers.users_table(users)))
+
 
     nickname = None
 
@@ -125,18 +146,56 @@ def handle_client(
                     continue
 
                 niks.add(nickname)
-                list_of_clients[nickname] = [client_socket, addr, threading.Lock()]
 
-            # No lock here — other clients can select nicknames.
-            client_socket.sendall(
-                helpers.build_msg(
-                    "broadcast",
-                    "Nickname accepted. Welcome to the chat!"
+            send_lock = threading.Lock()
+            pending_messages = []
+            client_state = [
+                client_socket,
+                addr,
+                send_lock,
+                pending_messages,
+                True,
+            ]
+
+            with send_lock:
+                client_socket.sendall(
+                    helpers.build_msg(
+                        "broadcast",
+                        "Nickname accepted. Welcome to the chat!"
+                    )
                 )
-            )
+
+            with history_lock:
+                with nik_lock:
+                    list_of_clients[nickname] = client_state
+                    history_snapshot = list(chat_history)
+
+            if not helpers.send_history(
+                client_socket, history_snapshot, send_lock=send_lock
+            ):
+                with nik_lock:
+                    niks.discard(nickname)
+                    list_of_clients.pop(nickname, None)
+                client_socket.close()
+                return
+
+            with send_lock:
+                with nik_lock:
+                    client_state[4] = False
+                    pending = list(client_state[3])
+                    client_state[3].clear()
+                for message in pending:
+                    client_socket.sendall(helpers.build_msg("broadcast", message))
+
             # Keep one handler so command state follows nickname changes.
             command_handler = commands.ServerCommand(
-                client_socket, list_of_clients, niks, nik_lock, log, nickname
+                client_socket,
+                list_of_clients,
+                niks,
+                nik_lock,
+                log,
+                nickname,
+                history_lock,
             )
             # Notify other users that this user has joined the chat.
             command_handler.send_broadcast_msg(f"{nickname} has joined the chat.")
@@ -170,7 +229,6 @@ def handle_client(
 
     client_socket.settimeout(1.0)
 
-    
     # Chat loop
     while not stop_event.is_set():
         try:
@@ -195,7 +253,7 @@ def handle_client(
 
                 log.info(f"Received data from {addr}: {message}")
 
-                if not command_handler.handle_command(message):
+                if not command_handler.handle_command(message, chat_history):
                     should_continue = False
                     break
 
