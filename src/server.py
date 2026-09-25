@@ -1,6 +1,7 @@
 import logging
 import socket
 import threading
+from utilities import commands
 
 from config import pars_conf
 from utilities import helpers
@@ -31,6 +32,9 @@ def main():
             client, addr = server_socket.accept()
             log.info(f"Connection from {addr} and client {client}")
 
+            
+
+
             client_thread = threading.Thread(
                 target=handle_client,
                 args=(client, addr, stop_event, log, nik_lock, niks, list_of_clients),
@@ -48,6 +52,7 @@ def main():
             log.error(f"Socket error: {e}")
             helpers.shutdown_server(server_socket, stop_event)
             break
+
 
 
 def handle_client(
@@ -80,6 +85,7 @@ def handle_client(
                     return
                 buffer += data
                 if b"\n" not in buffer and len(buffer) > helpers.MAX_NICKNAME_SIZE:
+                    print(f"baffer {len(buffer)} max {helpers.MAX_NICKNAME_SIZE}")
                     log.warning(f"Client {addr} sent an oversized nickname")
                     client_socket.close()
                     return
@@ -90,6 +96,17 @@ def handle_client(
                 client_socket.close()
                 return
             nickname = raw_nickname.decode("utf-8").strip()
+
+            try:
+                nickname_message = helpers.decode_message(nickname)
+            except (TypeError, ValueError):
+                nickname_message = None
+            if (
+                isinstance(nickname_message, dict)
+                and nickname_message.get("type") == "broadcast"
+                and isinstance(nickname_message.get("data"), str)
+            ):
+                nickname = nickname_message["data"].strip()
 
             if not nickname:
                 log.warning(f"Client {addr} did not provide a nickname")
@@ -117,13 +134,12 @@ def handle_client(
                     "Nickname accepted. Welcome to the chat!"
                 )
             )
-
-            helpers.send_broadcast_msg(
-                client_socket,
-                f"{nickname} has joined the chat.",
-                list_of_clients,
-                nik_lock,
+            # Keep one handler so command state follows nickname changes.
+            command_handler = commands.ServerCommand(
+                client_socket, list_of_clients, niks, nik_lock, log, nickname
             )
+            # Notify other users that this user has joined the chat.
+            command_handler.send_broadcast_msg(f"{nickname} has joined the chat.")
 
             log.info(f"Client {addr} set nickname to {nickname}")
             break
@@ -154,6 +170,7 @@ def handle_client(
 
     client_socket.settimeout(1.0)
 
+    
     # Chat loop
     while not stop_event.is_set():
         try:
@@ -165,27 +182,28 @@ def handle_client(
 
             buffer += data
 
+            should_continue = True
             while b"\n" in buffer:
                 raw_message, buffer = buffer.split(b"\n", 1)
                 if len(raw_message) > helpers.MAX_MESSAGE_SIZE:
                     log.warning(f"Client {addr} sent an oversized message")
+                    should_continue = False
                     break
                 message = raw_message.decode("utf-8").strip()
                 if not message:
                     continue
 
                 log.info(f"Received data from {addr}: {message}")
-                helpers.send_broadcast_msg(
-                    client_socket,
-                    nickname + ": " + message,
-                    list_of_clients,
-                    nik_lock,
-                )
 
+                if not command_handler.handle_command(message):
+                    should_continue = False
+                    break
+
+            if not should_continue:
+                break
             if len(buffer) > helpers.MAX_MESSAGE_SIZE:
                 log.warning(f"Client {addr} sent an oversized message")
                 break
-
         except socket.timeout:
             continue
 
@@ -202,6 +220,7 @@ def handle_client(
             break
 
     # Cleanup
+    nickname = command_handler.nickname
     with nik_lock:
         if nickname in niks:
             niks.remove(nickname)
@@ -209,12 +228,7 @@ def handle_client(
         if nickname in list_of_clients and list_of_clients[nickname][0] is client_socket:
             del list_of_clients[nickname]
 
-    helpers.send_broadcast_msg(
-        client_socket,
-        f"{nickname} has left the chat.",
-        list_of_clients,
-        nik_lock,
-    )
+    command_handler.send_broadcast_msg(f"{nickname} has left the chat.")
 
     client_socket.close()
     log.info(f"Connection with {addr} closed")

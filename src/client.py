@@ -4,6 +4,7 @@ import threading
 
 from config import pars_conf
 from utilities import helpers
+from utilities import commands
 from utilities.logging_conf import setup_logging
 
 setup_logging("client")
@@ -23,9 +24,9 @@ def main():
 	except ConnectionRefusedError:
 		log.error(f"Could not connect to server at {host}:{port} ")
 		return
-
+	command_handler = commands.Client_command(client_socket, stop_event, log)
 	input_msg = threading.Thread(
-		target=send_messages, args=(client_socket, stop_event, log), daemon=True
+		target=send_messages, args=(client_socket, stop_event, log, command_handler), daemon=True
 	)
 	input_msg.start()
 	log.info(f"Connected to server at {host}:{port}")
@@ -90,14 +91,24 @@ def receive_messages(client_socket, stop_event, log):
 			break
 
 
-def send_messages(client_socket, stop_event, log):
+def send_messages(client_socket, stop_event, log, command_handler):
+	try:
+		nickname = input("Enter nickname: ").strip()
+		if not nickname:
+			log.warning("Nickname cannot be empty.")
+			stop_event.set()
+			return
+		client_socket.sendall((nickname + "\n").encode("utf-8"))
+	except OSError as e:
+		log.error(f"Error sending nickname: {e}")
+		stop_event.set()
+		return
+
 	while not stop_event.is_set():
 		try:
 			message = input("Enter message (or '/exit' to quit): ")
-			if message.lower() == "/exit":
-				stop_event.set()
-				break
-			client_socket.sendall((message + "\n").encode("utf-8"))
+			command_handler.handle_command(message)
+			
 		except OSError as e:
 			log.error(f"Error sending data: {e}")
 			stop_event.set()
