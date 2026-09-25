@@ -238,7 +238,6 @@ class ServerCommand:
             return False
     
         message_type = data_from_client.get("type")
-    
         command_map = {
             "changeNickname": self.change_nickname,
             "/changeNickname": self.change_nickname,
