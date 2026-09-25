@@ -254,7 +254,6 @@ class ServerCommand:
                     helpers.build_msg("broadcast", "Message cannot be empty.")
                 )
                 return True
-            self.log('не понятно что тут', data)
             self.send_broadcast_msg(f"{self.nickname}: {data}")
             
             return True

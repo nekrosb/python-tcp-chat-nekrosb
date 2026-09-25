@@ -194,6 +194,7 @@ def handle_client(
                     continue
 
                 log.info(f"Received data from {addr}: {message}")
+
                 if not command_handler.handle_command(message):
                     should_continue = False
                     break
