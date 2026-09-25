@@ -148,6 +148,14 @@ def handle_client(
                 niks.add(nickname)
 
             send_lock = threading.Lock()
+            pending_messages = []
+            client_state = [
+                client_socket,
+                addr,
+                send_lock,
+                pending_messages,
+                True,
+            ]
 
             with send_lock:
                 client_socket.sendall(
@@ -157,16 +165,27 @@ def handle_client(
                     )
                 )
 
+            with history_lock:
+                with nik_lock:
+                    list_of_clients[nickname] = client_state
+                    history_snapshot = list(chat_history)
+
             if not helpers.send_history(
-                client_socket, chat_history, history_lock, send_lock
+                client_socket, history_snapshot, send_lock=send_lock
             ):
                 with nik_lock:
                     niks.discard(nickname)
+                    list_of_clients.pop(nickname, None)
                 client_socket.close()
                 return
 
-            with nik_lock:
-                list_of_clients[nickname] = [client_socket, addr, send_lock]
+            with send_lock:
+                with nik_lock:
+                    client_state[4] = False
+                    pending = list(client_state[3])
+                    client_state[3].clear()
+                for message in pending:
+                    client_socket.sendall(helpers.build_msg("broadcast", message))
 
             # Keep one handler so command state follows nickname changes.
             command_handler = commands.ServerCommand(

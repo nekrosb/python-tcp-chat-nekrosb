@@ -26,13 +26,16 @@ class ServerCommand:
     def send_broadcast_msg(self, msg, chat_history=None):
         disconnected_users = []
 
-        with self.clients_lock:
-            users = list(self.list_of_clients.items())
-
-        if chat_history is not None:
-            helpers.work_with_history(
-                msg, chat_history, self.history_lock
-            )
+        if chat_history is not None and self.history_lock is not None:
+            with self.history_lock:
+                with self.clients_lock:
+                    helpers.work_with_history(msg, chat_history)
+                    users = list(self.list_of_clients.items())
+        else:
+            if chat_history is not None:
+                helpers.work_with_history(msg, chat_history)
+            with self.clients_lock:
+                users = list(self.list_of_clients.items())
 
         for username, user in users:
             user_socket = user[0]
@@ -41,6 +44,11 @@ class ServerCommand:
 
             try:
                 send_lock = user[2] if len(user) > 2 else self.clients_lock
+                if len(user) > 4:
+                    with self.clients_lock:
+                        if user[4]:
+                            user[3].append(msg)
+                            continue
                 with send_lock:
                     user_socket.sendall(helpers.build_msg("broadcast", msg))
             except (ConnectionResetError, BrokenPipeError, OSError):
