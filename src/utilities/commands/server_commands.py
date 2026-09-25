@@ -125,6 +125,46 @@ class ServerCommand:
 
         return True
 
+    def private_message(self, target_nickname, message):
+
+    
+        target_nickname = str(target_nickname or "").strip()
+        message = str(message or "").strip()
+
+        if not target_nickname:
+            self.client_socket.sendall(
+                helpers.build_msg("broadcast", "Private message requires a nickname.")
+            )
+            return True
+        if not message:
+            self.client_socket.sendall(
+                helpers.build_msg("broadcast", "Message cannot be empty.")
+            )
+            return True
+
+        with self.clients_lock:
+            target = self.list_of_clients.get(target_nickname)
+
+        if target is None:
+            self.client_socket.sendall(
+                helpers.build_msg(
+                    "broadcast", f"User not found: {target_nickname}"
+                )
+            )
+            return True
+
+        try:
+            target[0].sendall(
+                helpers.build_msg(
+                    "private", message, userName=self.nickname
+                )
+            )
+        except (ConnectionResetError, BrokenPipeError, OSError):
+            self.client_socket.sendall(
+                helpers.build_msg("broadcast", "Could not deliver private message.")
+            )
+        return True
+
     def handle_command(self, user_input):
         try:
             data_from_client = helpers.decode_message(user_input)
@@ -143,6 +183,7 @@ class ServerCommand:
             "changeNickname": self.change_nickname,
             "/changeNickname": self.change_nickname,
             "/exit": self.exit_chat,
+            "private": self.private_message,
         }
 
         if message_type == "broadcast":
@@ -161,6 +202,10 @@ class ServerCommand:
             command = data_from_client.get("command")
             data = data_from_client.get("data", "")
             if command in command_map:
+                if command == "private":
+                    return command_map[command](
+                        data_from_client.get("userName"), data
+                    )
                 return command_map[command](data)
             else:
                 self.client_socket.sendall(

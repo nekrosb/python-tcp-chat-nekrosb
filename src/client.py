@@ -4,7 +4,7 @@ import threading
 
 from config import pars_conf
 from utilities import helpers
-from utilities import commands
+from utilities.commands import client_commands as commands
 from utilities.logging_conf import setup_logging
 
 setup_logging("client")

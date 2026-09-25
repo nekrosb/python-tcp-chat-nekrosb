@@ -1,7 +1,7 @@
 import logging
 import socket
 import threading
-from utilities import commands
+from utilities.commands import server_commands as commands
 
 from config import pars_conf
 from utilities import helpers

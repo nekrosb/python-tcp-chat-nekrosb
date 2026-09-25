@@ -57,6 +57,33 @@ class Client_command:
             pass
         return False
 
+    def private_message(self, input):
+        parts = str(input).strip().split(maxsplit=1)
+        if len(parts) < 2:
+            self.log.warning("Private message command requires a nickname and a message.")
+            return True
+
+        target_nickname, message = parts
+        message = message.strip()
+        if not message:
+            self.log.warning("Message cannot be empty.")
+            return True
+
+        try:
+            self.client_socket.sendall(
+                helpers.build_msg(
+                    "command",
+                    message,
+                    command="private",
+                    userName=target_nickname,
+                )
+            )
+        except OSError as e:
+            self.log.error(f"Error sending data: {e}")
+            self.stop_event.set()
+            return False
+        return True
+
     def send_broadcast_message(self, message):
         message = str(message).strip()
         if not message:
@@ -86,6 +113,7 @@ class Client_command:
             "/exit": self.exit_chat,
             "/changenickname": self.change_nickname,
             "/broadcast": self.send_broadcast_message,
+            "/private": self.private_message,
         }
 
 
