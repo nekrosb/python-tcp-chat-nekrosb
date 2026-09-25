@@ -69,3 +69,36 @@ def writer_msg(data):
         Console.brotcast_msg(str(message_data))
 
 
+
+
+def send_history(client_socket, chat_history, history_lock=None):
+    if history_lock is None:
+        messages = list(chat_history)
+    else:
+        with history_lock:
+            messages = list(chat_history)
+
+    if not messages:
+        return
+
+    try:
+        for message in messages:
+
+            client_socket.sendall(build_msg("broadcast", message))
+    except OSError as e:
+        print(f"Error sending chat history: {e}")
+
+
+
+def work_with_history(msg, chat_history, history_lock=None):
+    if history_lock is None:
+        if len(chat_history) > 20:
+            chat_history.pop(0)
+        chat_history.append(msg)
+        return
+
+    with history_lock:
+        if len(chat_history) > 20:
+            chat_history.pop(0)
+        chat_history.append(msg)
+

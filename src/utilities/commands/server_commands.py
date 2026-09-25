@@ -13,6 +13,7 @@ class ServerCommand:
         clients_lock,
         log,
         nickname,
+        history_lock=None,
     ):
         self.client_socket = client_socket
         self.nickname = nickname
@@ -20,12 +21,18 @@ class ServerCommand:
         self.niks = niks
         self.clients_lock = clients_lock
         self.log = log
+        self.history_lock = history_lock
 
-    def send_broadcast_msg(self, msg):
+    def send_broadcast_msg(self, msg, chat_history=None):
         disconnected_users = []
 
         with self.clients_lock:
             users = list(self.list_of_clients.items())
+
+        if chat_history is not None:
+            helpers.work_with_history(
+                f"/[{self.nickname}]: {msg}", chat_history, self.history_lock
+            )
 
         for username, user in users:
             user_socket = user[0]
@@ -167,7 +174,7 @@ class ServerCommand:
             )
         return True
 
-    def handle_command(self, user_input):
+    def handle_command(self, user_input, chat_history):
         try:
             data_from_client = helpers.decode_message(user_input)
         except (TypeError, ValueError) as exc:
@@ -197,7 +204,7 @@ class ServerCommand:
                     helpers.build_msg("broadcast", "Message cannot be empty.")
                 )
                 return True
-            self.send_broadcast_msg(f"{self.nickname}: {data}")
+            self.send_broadcast_msg(f"{self.nickname}: {data}", chat_history)
             
             return True
         elif message_type == "command":

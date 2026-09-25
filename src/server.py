@@ -24,6 +24,8 @@ def main():
     stop_event = threading.Event()
     nik_lock = threading.Lock()
     niks = set()
+    chat_history = []
+    history_lock = threading.Lock()
     list_of_clients = {}
 
     while not stop_event.is_set():
@@ -37,7 +39,17 @@ def main():
 
             client_thread = threading.Thread(
                 target=handle_client,
-                args=(client, addr, stop_event, log, nik_lock, niks, list_of_clients),
+                args=(
+                    client,
+                    addr,
+                    stop_event,
+                    log,
+                    nik_lock,
+                    niks,
+                    list_of_clients,
+                    chat_history,
+                    history_lock,
+                ),
                 daemon=True,
             )
             client_thread.start()
@@ -56,7 +68,15 @@ def main():
 
 
 def handle_client(
-    client_socket, addr, stop_event, log, nik_lock, niks, list_of_clients
+    client_socket,
+    addr,
+    stop_event,
+    log,
+    nik_lock,
+    niks,
+    list_of_clients,
+    chat_history,
+    history_lock,
 ):
     log.info(f"Handling client {addr}")
 
@@ -65,6 +85,7 @@ def handle_client(
 
     if users:
         client_socket.sendall(helpers.build_msg("users", helpers.users_table(users)))
+
 
     nickname = None
 
@@ -136,7 +157,13 @@ def handle_client(
             )
             # Keep one handler so command state follows nickname changes.
             command_handler = commands.ServerCommand(
-                client_socket, list_of_clients, niks, nik_lock, log, nickname
+                client_socket,
+                list_of_clients,
+                niks,
+                nik_lock,
+                log,
+                nickname,
+                history_lock,
             )
             # Notify other users that this user has joined the chat.
             command_handler.send_broadcast_msg(f"{nickname} has joined the chat.")
@@ -170,7 +197,7 @@ def handle_client(
 
     client_socket.settimeout(1.0)
 
-    
+    helpers.send_history(client_socket, chat_history, history_lock)
     # Chat loop
     while not stop_event.is_set():
         try:
@@ -195,7 +222,7 @@ def handle_client(
 
                 log.info(f"Received data from {addr}: {message}")
 
-                if not command_handler.handle_command(message):
+                if not command_handler.handle_command(message, chat_history):
                     should_continue = False
                     break
 
