@@ -80,6 +80,27 @@ class ServerCommandTests(unittest.TestCase):
         payload = json.loads(other.sent[-1].decode("utf-8"))
         self.assertEqual(payload["data"], "alice: hi there")
 
+    def test_broadcast_does_not_include_command_prefix(self):
+        sock = DummySocket()
+        other = DummySocket()
+        logger = Mock()
+        server = commands.ServerCommand(
+            sock,
+            {"alice": [sock, ("127.0.0.1", 1234)], "bob": [other, ("127.0.0.2", 4321)]},
+            {"alice", "bob"},
+            threading.Lock(),
+            logger,
+            "alice",
+        )
+
+        result = server.handle_command(
+            '{"type": "broadcast", "data": "/broadcast hello"}'
+        )
+
+        self.assertTrue(result)
+        payload = json.loads(other.sent[-1].decode("utf-8"))
+        self.assertEqual(payload["data"], "alice: hello")
+
     def test_renamed_nickname_respects_size_limit(self):
         sock = DummySocket()
         logger = Mock()

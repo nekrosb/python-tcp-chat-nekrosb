@@ -92,6 +92,18 @@ def receive_messages(client_socket, stop_event, log):
 
 
 def send_messages(client_socket, stop_event, log, command_handler):
+	try:
+		nickname = input("Enter nickname: ").strip()
+		if not nickname:
+			log.warning("Nickname cannot be empty.")
+			stop_event.set()
+			return
+		client_socket.sendall((nickname + "\n").encode("utf-8"))
+	except OSError as e:
+		log.error(f"Error sending nickname: {e}")
+		stop_event.set()
+		return
+
 	while not stop_event.is_set():
 		try:
 			message = input("Enter message (or '/exit' to quit): ")

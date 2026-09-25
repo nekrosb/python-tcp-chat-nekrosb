@@ -72,17 +72,14 @@ class Client_command:
         return True
 
     def handle_command(self, user_input):
-        text = (user_input or "").strip()
-        if not text:
-            self.log.warning("Empty input ignored. Type /help for a list of commands.")
+        if not user_input or not str(user_input).strip():
+            self.log.warning("Input cannot be empty.")
             return True
 
-        if not text.startswith("/"):
-            return self.send_broadcast_message(text)
-
-        parts = text.split()
+        parts = str(user_input).strip().split(maxsplit=1)
         command = parts[0].lower()
-        args = parts[1:]
+        args = parts[1] if len(parts) > 1 else ""
+
         command_map = {
             "/help": self.write_help,
             "/users": self.take_user,
@@ -91,29 +88,21 @@ class Client_command:
             "/broadcast": self.send_broadcast_message,
         }
 
-        if command not in command_map:
-            self.log.warning(
-                f"Unknown command: {parts[0]}. Type /help for a list of commands."
-            )
-            return True
 
-        handler = command_map[command]
-        if command in {"/help", "/users", "/exit"}:
-            return handler(*args)
-
-        if command == "/changenickname":
-            if len(args) != 1:
-                self.log.warning("Usage: /changeNickname <new_nickname>")
+        if args:
+            if command not in command_map:
+                if not command.startswith("/"):
+                    return self.send_broadcast_message(str(user_input).strip())
+                self.log.warning(f"Unknown command: {command}")
                 return True
-            return handler(args[0])
-
-        if not args:
-            self.log.warning(f"Usage: {parts[0]} <message>")
-            return True
-
-        return handler(" ".join(args))
-
-
+            return command_map[command](args)
+        else:
+            if command not in command_map:
+                self.log.warning(f"Unknown command: {command}")
+                return True
+            return command_map[command]()
+        
+    
 class ServerCommand:
     def __init__(
         self,
@@ -221,12 +210,21 @@ class ServerCommand:
             pass
         return False
 
-    def handle_command(self, user_input):
-        commands = {
-            "changeNickname": self.change_nickname,
-            "/exit": self.exit_chat,
-        }
+    def send_users(self):
+        with self.clients_lock:
+            users_list = helpers.users_table(self.list_of_clients)
 
+        try:
+            self.client_socket.sendall(
+                helpers.build_msg("users", users_list)
+            )
+        except OSError as e:
+            self.log.error(f"Error sending users list: {e}")
+            return False
+
+        return True
+
+    def handle_command(self, user_input):
         try:
             data_from_client = helpers.decode_message(user_input)
         except (TypeError, ValueError) as exc:
@@ -238,47 +236,39 @@ class ServerCommand:
             except OSError:
                 pass
             return False
-
-        if not isinstance(data_from_client, dict):
-            self.log.warning(f"Client {self.nickname} sent a non-object JSON message.")
-            try:
-                self.client_socket.sendall(
-                    helpers.build_msg("broadcast", "Invalid JSON message.")
-                )
-            except OSError:
-                pass
-            return False
-
+    
         message_type = data_from_client.get("type")
-        data = data_from_client.get("data")
-
-        if message_type == "users":
-            with self.clients_lock:
-                snapshot = dict(self.list_of_clients)
-            self.client_socket.sendall(
-                helpers.build_msg("users", helpers.users_table(snapshot))
-            )
-            return True
+    
+        command_map = {
+            "changeNickname": self.change_nickname,
+            "/changeNickname": self.change_nickname,
+            "/exit": self.exit_chat,
+        }
 
         if message_type == "broadcast":
-            if not isinstance(data, str):
-                self.log.warning(f"Client {self.nickname} sent an invalid broadcast message.")
-                return False
+            data = data_from_client.get("data", "")
+            data = str(data).strip()
+            if data.startswith("/broadcast"):
+                data = data[len("/broadcast"):].strip()
+            if not data:
+                self.client_socket.sendall(
+                    helpers.build_msg("broadcast", "Message cannot be empty.")
+                )
+                return True
             self.send_broadcast_msg(f"{self.nickname}: {data}")
             return True
-
-        if message_type == "command":
+        elif message_type == "command":
             command = data_from_client.get("command")
-            if not isinstance(command, str):
-                self.log.warning(
-                    f"Client {self.nickname} sent a command without a valid name."
+            data = data_from_client.get("data", "")
+            if command in command_map:
+                return command_map[command](data)
+            else:
+                self.client_socket.sendall(
+                    helpers.build_msg("broadcast", f"Unknown command: {command}")
                 )
-                return False
-            handler = commands.get(command)
-            if handler is not None:
-                value = data if data is not None else None
-                return handler(value)
-            self.log.warning(f"Unsupported command received from {self.nickname}: {command}")
-            return True
+                return True
+        elif message_type == "users":
+            return self.send_users()
 
+        self.log.warning(f"Unknown message type: {message_type}")
         return True

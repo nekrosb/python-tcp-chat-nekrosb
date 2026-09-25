@@ -56,10 +56,12 @@ def writer_msg(data):
     message_data = msg.get("data", "")
 
     if message_type == "users" and isinstance(message_data, dict):
+        
         Console.users_table(message_data)
     elif message_type == "broadcast":
         Console.brotcast_msg(str(message_data))
     elif message_type == "command":
+
         Console.error_msg(str(message_data))
     else:
         Console.brotcast_msg(str(message_data))

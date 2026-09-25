@@ -97,6 +97,17 @@ def handle_client(
                 return
             nickname = raw_nickname.decode("utf-8").strip()
 
+            try:
+                nickname_message = helpers.decode_message(nickname)
+            except (TypeError, ValueError):
+                nickname_message = None
+            if (
+                isinstance(nickname_message, dict)
+                and nickname_message.get("type") == "broadcast"
+                and isinstance(nickname_message.get("data"), str)
+            ):
+                nickname = nickname_message["data"].strip()
+
             if not nickname:
                 log.warning(f"Client {addr} did not provide a nickname")
                 continue
@@ -192,8 +203,6 @@ def handle_client(
             if len(buffer) > helpers.MAX_MESSAGE_SIZE:
                 log.warning(f"Client {addr} sent an oversized message")
                 break
-
-            
         except socket.timeout:
             continue
 
