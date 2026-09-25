@@ -248,14 +248,15 @@ class ServerCommand:
         if message_type == "broadcast":
             data = data_from_client.get("data", "")
             data = str(data).strip()
-            if data.startswith("/broadcast"):
-                data = data[len("/broadcast"):].strip()
+
             if not data:
                 self.client_socket.sendall(
                     helpers.build_msg("broadcast", "Message cannot be empty.")
                 )
                 return True
+            self.log('не понятно что тут', data)
             self.send_broadcast_msg(f"{self.nickname}: {data}")
+            
             return True
         elif message_type == "command":
             command = data_from_client.get("command")
