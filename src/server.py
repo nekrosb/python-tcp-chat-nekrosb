@@ -1,7 +1,7 @@
 import logging
 import socket
 import threading
-from utilities import commands
+from utilities.commands import server_commands as commands
 
 from config import pars_conf
 from utilities import helpers
@@ -125,7 +125,7 @@ def handle_client(
                     continue
 
                 niks.add(nickname)
-                list_of_clients[nickname] = [client_socket, addr]
+                list_of_clients[nickname] = [client_socket, addr, threading.Lock()]
 
             # No lock here — other clients can select nicknames.
             client_socket.sendall(

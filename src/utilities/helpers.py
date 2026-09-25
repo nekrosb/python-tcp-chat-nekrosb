@@ -60,6 +60,8 @@ def writer_msg(data):
         Console.users_table(message_data)
     elif message_type == "broadcast":
         Console.brotcast_msg(str(message_data))
+    elif message_type == "private":
+        Console.private_msg(str(message_data), str(msg.get("userName", "")))
     elif message_type == "command":
 
         Console.error_msg(str(message_data))

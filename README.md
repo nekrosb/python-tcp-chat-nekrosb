@@ -41,8 +41,8 @@ line separately.
 | --- | --- | --- |
 | `type` | yes | Determines how the message is handled. |
 | `data` | yes | The message payload. It is text for chat messages and an object for `users` responses. |
-| `command` | no | Server command name. Currently `changeNickname`. |
-| `userName` | no | Reserved optional recipient field; private messages are not implemented yet. |
+| `command` | no | Server command name: `changeNickname` or `private`. |
+| `userName` | no | Recipient nickname in private requests; sender nickname in private messages delivered by the server. |
 
 The server sends the complete JSON envelope, but the client displays only the
 `data` field. The `type`, `command`, and `userName` fields are protocol metadata
@@ -84,9 +84,17 @@ Commands use `command` for the operation name and `data` for its argument:
 {"type": "command", "command": "changeNickname", "data": "new_name"}\n
 ```
 
-The currently supported server command is `changeNickname`.
+The currently supported server commands are `changeNickname` and `private`.
+
+Private message command:
+
+```text
+/private <nickname> <message>
+```
+
+It is sent as a `command` message with `command: "private"`, the recipient in
+`userName`, and the message text in `data`.
 
 ## Current limitations
 
-Private messages are not implemented in the current client or server. The
-`userName` field is reserved for a future private-message implementation.
+Private messages are delivered only to users currently connected to the chat.
