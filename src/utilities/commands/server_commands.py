@@ -33,7 +33,9 @@ class ServerCommand:
                 continue
 
             try:
-                user_socket.sendall(helpers.build_msg("broadcast", msg))
+                send_lock = user[2] if len(user) > 2 else self.clients_lock
+                with send_lock:
+                    user_socket.sendall(helpers.build_msg("broadcast", msg))
             except (ConnectionResetError, BrokenPipeError, OSError):
                 disconnected_users.append(username)
 
@@ -126,8 +128,6 @@ class ServerCommand:
         return True
 
     def private_message(self, target_nickname, message):
-
-    
         target_nickname = str(target_nickname or "").strip()
         message = str(message or "").strip()
 
@@ -154,11 +154,13 @@ class ServerCommand:
             return True
 
         try:
-            target[0].sendall(
-                helpers.build_msg(
-                    "private", message, userName=self.nickname
+            send_lock = target[2] if len(target) > 2 else self.clients_lock
+            with send_lock:
+                target[0].sendall(
+                    helpers.build_msg(
+                        "private", message, userName=self.nickname
+                    )
                 )
-            )
         except (ConnectionResetError, BrokenPipeError, OSError):
             self.client_socket.sendall(
                 helpers.build_msg("broadcast", "Could not deliver private message.")

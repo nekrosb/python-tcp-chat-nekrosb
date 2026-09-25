@@ -17,6 +17,7 @@ class Client_command:
     [bold green]/broadcast <message>[/bold green] - Send a chat message to everyone
     [bold green]/exit[/bold green] - Exit the chat
     [bold green]/changeNickname <new_nick>[/bold green] - Change your nickname
+    [bold green]/private <nickname> <message>[/bold green] - Send a private message
     """
         )
         return True
@@ -57,7 +58,7 @@ class Client_command:
             pass
         return False
 
-    def private_message(self, input):
+    def private_message(self, input=""):
         parts = str(input).strip().split(maxsplit=1)
         if len(parts) < 2:
             self.log.warning("Private message command requires a nickname and a message.")

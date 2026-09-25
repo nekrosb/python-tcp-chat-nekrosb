@@ -125,7 +125,7 @@ def handle_client(
                     continue
 
                 niks.add(nickname)
-                list_of_clients[nickname] = [client_socket, addr]
+                list_of_clients[nickname] = [client_socket, addr, threading.Lock()]
 
             # No lock here — other clients can select nicknames.
             client_socket.sendall(
