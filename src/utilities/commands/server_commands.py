@@ -31,7 +31,7 @@ class ServerCommand:
 
         if chat_history is not None:
             helpers.work_with_history(
-                f"/[{self.nickname}]: {msg}", chat_history, self.history_lock
+                msg, chat_history, self.history_lock
             )
 
         for username, user in users:

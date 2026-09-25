@@ -71,7 +71,7 @@ def writer_msg(data):
 
 
 
-def send_history(client_socket, chat_history, history_lock=None):
+def send_history(client_socket, chat_history, history_lock=None, send_lock=None):
     if history_lock is None:
         messages = list(chat_history)
     else:
@@ -79,26 +79,32 @@ def send_history(client_socket, chat_history, history_lock=None):
             messages = list(chat_history)
 
     if not messages:
-        return
+        return True
 
     try:
-        for message in messages:
+        if send_lock is None:
+            for message in messages:
+                client_socket.sendall(build_msg("broadcast", message))
+        else:
+            with send_lock:
+                for message in messages:
+                    client_socket.sendall(build_msg("broadcast", message))
+    except (OSError, TimeoutError):
+        return False
 
-            client_socket.sendall(build_msg("broadcast", message))
-    except OSError as e:
-        print(f"Error sending chat history: {e}")
+    return True
 
 
 
 def work_with_history(msg, chat_history, history_lock=None):
     if history_lock is None:
-        if len(chat_history) > 20:
+        if len(chat_history) >= 20:
             chat_history.pop(0)
         chat_history.append(msg)
         return
 
     with history_lock:
-        if len(chat_history) > 20:
+        if len(chat_history) >= 20:
             chat_history.pop(0)
         chat_history.append(msg)
 

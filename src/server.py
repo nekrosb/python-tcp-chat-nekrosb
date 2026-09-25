@@ -146,15 +146,28 @@ def handle_client(
                     continue
 
                 niks.add(nickname)
-                list_of_clients[nickname] = [client_socket, addr, threading.Lock()]
 
-            # No lock here — other clients can select nicknames.
-            client_socket.sendall(
-                helpers.build_msg(
-                    "broadcast",
-                    "Nickname accepted. Welcome to the chat!"
+            send_lock = threading.Lock()
+
+            with send_lock:
+                client_socket.sendall(
+                    helpers.build_msg(
+                        "broadcast",
+                        "Nickname accepted. Welcome to the chat!"
+                    )
                 )
-            )
+
+            if not helpers.send_history(
+                client_socket, chat_history, history_lock, send_lock
+            ):
+                with nik_lock:
+                    niks.discard(nickname)
+                client_socket.close()
+                return
+
+            with nik_lock:
+                list_of_clients[nickname] = [client_socket, addr, send_lock]
+
             # Keep one handler so command state follows nickname changes.
             command_handler = commands.ServerCommand(
                 client_socket,
@@ -197,7 +210,6 @@ def handle_client(
 
     client_socket.settimeout(1.0)
 
-    helpers.send_history(client_socket, chat_history, history_lock)
     # Chat loop
     while not stop_event.is_set():
         try:
